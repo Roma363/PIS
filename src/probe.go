@@ -16,5 +16,3 @@ func EvaluateStatus(statusCode int, latencyMs int64, timeoutMs int64) string {
 	if statusCode >= 200 && statusCode < 400 {
 		return "UP"
 	}
-	return "DOWN"
-}
