@@ -1,0 +1,597 @@
+openapi: 3.0.3
+info:
+  title: GoUptime Management & Observation API
+  version: 1.0.0
+  description: |
+    Формальний контракт REST API мікросервісу моніторингу доступності HTTP/HTTPS-ресурсів **GoUptime**.
+    Спроєктовано за методологією Specification-Driven Development (SDD, API-First) на основі затвердженої специфікації `spec/srs.md` (включно з Розділом 7 «Адендум: Програмний інтерфейс REST API»).
+    
+    Архітектурні обмеження:
+    - Оперативний стан зберігається виключно в пам'яті процесу (`REQ-NF-001`, `REQ-NF-005`).
+    - Валідація конфігурації виконується за принципом Fail-Fast до ініціації перевірок (`REQ-NF-006`).
+  contact:
+    name: Roman Benza
+    url: https://github.com/Roma363/PIS
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.gouptime.internal
+    description: GoUptime Internal Service Endpoint (In-Memory Instance)
+
+tags:
+  - name: Resources
+    description: Керування конфігурацією HTTP/HTTPS-ресурсів в оперативній пам'яті
+  - name: Checks
+    description: Ініціація синхронних перевірок та отримання результатів моніторингу
+
+security: []
+
+paths:
+  /api/v1/resources:
+    get:
+      tags:
+        - Resources
+      summary: Отримати список зареєстрованих ресурсів
+      description: Повертає масив усіх активних ресурсів моніторингу, що зберігаються в оперативній пам'яті сервісу.
+      operationId: listResources
+      x-srs-requirements:
+        - REQ-API-001
+        - REQ-F-002
+        - REQ-NF-005
+      responses:
+        '200':
+          description: Успішне отримання списку ресурсів
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Resource'
+              examples:
+                ResourcesList:
+                  summary: Список зареєстрованих ресурсів у пам'яті (POS-002)
+                  value:
+                    - id: kpi-main
+                      url: https://kpi.ua
+                      interval_seconds: 10
+                      timeout_ms: 2000
+                      warning_threshold_ms: 800
+                    - id: github-status
+                      url: https://www.githubstatus.com
+                      interval_seconds: 15
+                      timeout_ms: 3000
+                      warning_threshold_ms: 1000
+        '400':
+          description: Некоректні параметри запиту
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                BadRequestError:
+                  summary: Некоректний запит до колекції ресурсів
+                  value:
+                    timestamp: '2026-10-31T19:00:00Z'
+                    code: VALIDATION_ERROR
+                    message: Invalid request parameters
+
+    post:
+      tags:
+        - Resources
+      summary: Зареєструвати новий ресурс моніторингу
+      description: |
+        Додає новий ресурс до in-memory реєстру після проходження Fail-Fast валідації (`REQ-F-002..006`, `REQ-NF-006`).
+        Якщо числові поля пропущено, застосовуються дефолтні значення (`interval_seconds=10`, `timeout_ms=2000`, `warning_threshold_ms=800`).
+      operationId: createResource
+      x-srs-requirements:
+        - REQ-API-002
+        - REQ-API-005
+        - REQ-F-002
+        - REQ-F-003
+        - REQ-F-004
+        - REQ-F-005
+        - REQ-F-006
+        - REQ-NF-006
+      requestBody:
+        required: true
+        description: Конфігурація нового ресурсу моніторингу
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceCreateRequest'
+            examples:
+              MinimalWithDefaults:
+                summary: Мінімальний запит із застосуванням дефолтів (POS-001)
+                value:
+                  id: kpi-main
+                  url: https://kpi.ua
+              FullCustomConfig:
+                summary: Повна конфігурація ресурсу
+                value:
+                  id: github-status
+                  url: https://www.githubstatus.com
+                  interval_seconds: 15
+                  timeout_ms: 3000
+                  warning_threshold_ms: 1000
+      responses:
+        '201':
+          description: Ресурс успішно створено та додано до моніторингу в пам'яті
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+              examples:
+                CreatedWithDefaults:
+                  summary: Створений ресурс із дефолтними параметрами (POS-001)
+                  value:
+                    id: kpi-main
+                    url: https://kpi.ua
+                    interval_seconds: 10
+                    timeout_ms: 2000
+                    warning_threshold_ms: 800
+        '400':
+          description: Помилка валідації вхідних даних (порожні обов'язкові поля, невалідна схема URL, null або значення <= 0)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                EmptyRequiredField:
+                  summary: Порожній або відсутній id чи url (NEG-001, REQ-F-002)
+                  value:
+                    timestamp: '2026-10-31T19:00:00Z'
+                    code: VALIDATION_ERROR
+                    message: Required fields id and url must be non-empty strings
+                    details:
+                      - field: id
+                        issue: must not be empty (REQ-F-002)
+                InvalidURLScheme:
+                  summary: Непідтримувана схема URL (NEG-003, REQ-F-004)
+                  value:
+                    timestamp: '2026-10-31T19:01:00Z'
+                    code: VALIDATION_ERROR
+                    message: URL must have a valid http or https scheme and non-empty host
+                    details:
+                      - field: url
+                        issue: unsupported scheme ftp://, expected http:// or https:// (REQ-F-004)
+                NullOrNonPositiveValue:
+                  summary: Значення null або <= 0 (NEG-004, REQ-F-006)
+                  value:
+                    timestamp: '2026-10-31T19:02:00Z'
+                    code: VALIDATION_ERROR
+                    message: Numeric parameters must not be null and must be strictly greater than 0
+                    details:
+                      - field: timeout_ms
+                        issue: value must be > 0 and non-null (REQ-F-006)
+        '409':
+          description: Конфлікт — ресурс із таким ідентифікатором уже існує в пам'яті
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                DuplicateResourceID:
+                  summary: Дублювання ідентифікатора id (NEG-002, REQ-F-003)
+                  value:
+                    timestamp: '2026-10-31T19:03:00Z'
+                    code: DUPLICATE_RESOURCE_ID
+                    message: Resource with id 'kpi-main' already exists
+                    details:
+                      - field: id
+                        issue: resource identifier must be unique (REQ-F-003)
+        '422':
+          description: Порушення доменного інваріанта конфігурації (warning_threshold_ms >= timeout_ms)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ThresholdExceedsTimeout:
+                  summary: Порушення межі warning_threshold_ms >= timeout_ms (NEG-005, REQ-F-006)
+                  value:
+                    timestamp: '2026-10-31T19:04:00Z'
+                    code: CONFIG_ERROR
+                    message: Invalid threshold boundaries in resource configuration
+                    details:
+                      - field: warning_threshold_ms
+                        issue: must be strictly less than timeout_ms (REQ-F-006)
+
+  /api/v1/resources/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceIdParam'
+    get:
+      tags:
+        - Resources
+      summary: Отримати конфігурацію ресурсу за ID
+      description: Повертає параметри зареєстрованого в пам'яті ресурсу за його унікальним ідентифікатором.
+      operationId: getResourceById
+      x-srs-requirements:
+        - REQ-API-001
+        - REQ-API-005
+        - REQ-F-002
+      responses:
+        '200':
+          description: Конфігурацію ресурсу знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+              examples:
+                ResourceItem:
+                  summary: Параметри ресурсу kpi-main
+                  value:
+                    id: kpi-main
+                    url: https://kpi.ua
+                    interval_seconds: 10
+                    timeout_ms: 2000
+                    warning_threshold_ms: 800
+        '404':
+          $ref: '#/components/responses/ResourceNotFoundResponse'
+
+    delete:
+      tags:
+        - Resources
+      summary: Видалити ресурс із моніторингу
+      description: Видаляє ресурс з оперативної пам'яті та припиняє його періодичні перевірки.
+      operationId: deleteResource
+      x-srs-requirements:
+        - REQ-API-003
+        - REQ-API-005
+        - REQ-F-009
+        - REQ-NF-005
+      responses:
+        '204':
+          description: Ресурс успішно видалено з оперативної пам'яті (POS-006)
+        '404':
+          $ref: '#/components/responses/ResourceNotFoundResponse'
+
+  /api/v1/resources/{id}/checks:
+    parameters:
+      - $ref: '#/components/parameters/ResourceIdParam'
+    post:
+      tags:
+        - Checks
+      summary: Виконати синхронну HTTP GET-перевірку ресурсу
+      description: |
+        Ініціює позапланову HTTP/HTTPS GET-перевірку ресурсу згідно з правилами `REQ-F-007..014`:
+        - Автоматично слідує максимум за 3 редиректами (`REQ-F-008`).
+        - Тіло відповіді ігнорується (`REQ-NF-008`).
+        - Класифікує статус як `UP` (`latency_ms <= warning_threshold_ms`), `DEGRADED` (`warning_threshold_ms < latency_ms <= timeout_ms`) або `DOWN` (`latency_ms > timeout_ms`, код `>= 400`, тайм-аут або `> 3` редиректів).
+      operationId: runResourceCheck
+      x-srs-requirements:
+        - REQ-API-004
+        - REQ-API-005
+        - REQ-F-007
+        - REQ-F-008
+        - REQ-F-010
+        - REQ-F-011
+        - REQ-F-012
+        - REQ-F-013
+        - REQ-F-014
+        - REQ-NF-004
+        - REQ-NF-007
+        - REQ-NF-008
+      responses:
+        '200':
+          description: Перевірку завершено, сформовано структуру CheckResult
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckResult'
+              examples:
+                BDD-001-UP:
+                  summary: Статус UP — код 200, latency 650ms <= 800ms (POS-003, BDD-001)
+                  value:
+                    timestamp: '2026-10-31T19:05:00Z'
+                    id: kpi-main
+                    url: https://kpi.ua
+                    status: UP
+                    http_code: 200
+                    latency_ms: 650
+                    error: ''
+                BDD-002-DEGRADED:
+                  summary: Статус DEGRADED після редиректу — код 200, 800ms < latency 1200ms <= 2000ms (POS-004, BDD-002)
+                  value:
+                    timestamp: '2026-10-31T19:06:00Z'
+                    id: kpi-main
+                    url: https://kpi.ua
+                    status: DEGRADED
+                    http_code: 200
+                    latency_ms: 1200
+                    error: ''
+                BDD-003-DOWN-Timeout:
+                  summary: Статус DOWN через тайм-аут — http_code 0, latency 2000ms (POS-005, BDD-003)
+                  value:
+                    timestamp: '2026-10-31T19:07:00Z'
+                    id: kpi-main
+                    url: https://kpi.ua
+                    status: DOWN
+                    http_code: 0
+                    latency_ms: 2000
+                    error: request timeout exceeded 2000ms
+                BDD-003-DOWN-RedirectLimit:
+                  summary: Статус DOWN через перевищення ліміту 3 редиректів — http_code 0 (BDD-003)
+                  value:
+                    timestamp: '2026-10-31T19:08:00Z'
+                    id: kpi-main
+                    url: https://kpi.ua
+                    status: DOWN
+                    http_code: 0
+                    latency_ms: 450
+                    error: stopped after 3 redirects
+        '404':
+          $ref: '#/components/responses/ResourceNotFoundResponse'
+
+  /api/v1/resources/{id}/results:
+    parameters:
+      - $ref: '#/components/parameters/ResourceIdParam'
+    get:
+      tags:
+        - Checks
+      summary: Отримати останній результат перевірки ресурсу
+      description: Повертає збережений в оперативній пам'яті результат останньої завершеної перевірки ресурсу.
+      operationId: getResourceLastResult
+      x-srs-requirements:
+        - REQ-API-004
+        - REQ-API-005
+        - REQ-F-010
+        - REQ-F-011
+        - REQ-F-012
+        - REQ-F-013
+        - REQ-F-014
+        - REQ-NF-005
+        - REQ-NF-007
+      responses:
+        '200':
+          description: Останній результат перевірки ресурсу в пам'яті
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckResult'
+              examples:
+                LastResultUP:
+                  summary: Останній результат зі статусом UP (POS-003)
+                  value:
+                    timestamp: '2026-10-31T19:05:00Z'
+                    id: kpi-main
+                    url: https://kpi.ua
+                    status: UP
+                    http_code: 200
+                    latency_ms: 650
+                    error: ''
+        '404':
+          $ref: '#/components/responses/ResourceNotFoundResponse'
+
+components:
+  parameters:
+    ResourceIdParam:
+      name: id
+      in: path
+      required: true
+      description: Унікальний непорожній ідентифікатор ресурсу (`ResourceID`)
+      schema:
+        type: string
+        minLength: 1
+      example: kpi-main
+
+  responses:
+    ResourceNotFoundResponse:
+      description: Ресурс із вказаним ідентифікатором не знайдено в оперативній пам'яті
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            ResourceNotFound:
+              summary: Ресурс не знайдено в пам'яті (NEG-006)
+              value:
+                timestamp: '2026-10-31T19:10:00Z'
+                code: RESOURCE_NOT_FOUND
+                message: Resource with id 'unknown-id' was not found in memory
+                details:
+                  - field: id
+                    issue: no active resource matches the provided identifier
+
+  schemas:
+    ResourceCreateRequest:
+      type: object
+      description: |
+        Вхідні параметри для реєстрації ресурсу моніторингу (`REQ-F-002..006`).
+        Доменний інваріант: `warning_threshold_ms` має бути строго меншим за `timeout_ms` (`warning_threshold_ms < timeout_ms`).
+      required:
+        - id
+        - url
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          nullable: false
+          description: Унікальний непорожній ідентифікатор ресурсу (`REQ-F-002`, `REQ-F-003`)
+          example: kpi-main
+        url:
+          type: string
+          format: uri
+          pattern: '^https?://[^/\s]+.*$'
+          nullable: false
+          description: Коректний HTTP або HTTPS URL цільового ресурсу (`REQ-F-004`)
+          example: https://kpi.ua
+        interval_seconds:
+          type: integer
+          minimum: 1
+          default: 10
+          nullable: false
+          description: Інтервал між періодичними перевірками у секундах; дефолт 10 (`REQ-F-005`, `REQ-F-006`)
+          example: 10
+        timeout_ms:
+          type: integer
+          minimum: 1
+          default: 2000
+          nullable: false
+          description: Максимальний час очікування відповіді у мілісекундах; дефолт 2000 (`REQ-F-005`, `REQ-F-006`)
+          example: 2000
+        warning_threshold_ms:
+          type: integer
+          minimum: 1
+          default: 800
+          nullable: false
+          description: Поріг затримки у мілісекундах для переходу зі стану UP у DEGRADED (< timeout_ms); дефолт 800 (`REQ-F-005`, `REQ-F-006`)
+          example: 800
+
+    Resource:
+      type: object
+      description: Повна конфігурація зареєстрованого в пам'яті ресурсу моніторингу (`Resource`)
+      required:
+        - id
+        - url
+        - interval_seconds
+        - timeout_ms
+        - warning_threshold_ms
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          nullable: false
+          example: kpi-main
+        url:
+          type: string
+          format: uri
+          pattern: '^https?://[^/\s]+.*$'
+          nullable: false
+          example: https://kpi.ua
+        interval_seconds:
+          type: integer
+          minimum: 1
+          nullable: false
+          example: 10
+        timeout_ms:
+          type: integer
+          minimum: 1
+          nullable: false
+          example: 2000
+        warning_threshold_ms:
+          type: integer
+          minimum: 1
+          nullable: false
+          example: 800
+
+    AvailabilityStatus:
+      type: string
+      description: Стабільна машинно-читана множина станів доступності ресурсу (`REQ-NF-007`)
+      enum:
+        - UP
+        - DEGRADED
+        - DOWN
+      example: UP
+
+    CheckResult:
+      type: object
+      description: Результат однієї завершеної HTTP GET-перевірки ресурсу з 7 обов'язковими полями (`REQ-F-013`, `REQ-F-014`)
+      required:
+        - timestamp
+        - id
+        - url
+        - status
+        - http_code
+        - latency_ms
+        - error
+      additionalProperties: false
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          nullable: false
+          description: Часова мітка завершення перевірки у форматі RFC3339 у зоні UTC (`REQ-F-014`)
+          example: '2026-10-31T19:05:00Z'
+        id:
+          type: string
+          minLength: 1
+          nullable: false
+          description: Ідентифікатор перевіреного ресурсу
+          example: kpi-main
+        url:
+          type: string
+          format: uri
+          nullable: false
+          description: URL перевіреного ресурсу
+          example: https://kpi.ua
+        status:
+          $ref: '#/components/schemas/AvailabilityStatus'
+        http_code:
+          type: integer
+          minimum: 0
+          nullable: false
+          description: Код кінцевої HTTP-відповіді (`FinalResponse`) або 0 при мережевій помилці, тайм-ауті чи перевищенні ліміту редиректів (`REQ-F-008`, `REQ-F-012`)
+          example: 200
+        latency_ms:
+          type: integer
+          minimum: 0
+          nullable: false
+          description: Виміряна затримка перевірки у мілісекундах
+          example: 650
+        error:
+          type: string
+          nullable: false
+          description: Опис помилки тайм-ауту/мережі/редиректу або порожній рядок при успішній перевірці
+          example: ''
+
+    ErrorCode:
+      type: string
+      description: Уніфікований машинно-читаний код помилки API (`REQ-API-005`)
+      enum:
+        - CONFIG_ERROR
+        - VALIDATION_ERROR
+        - DUPLICATE_RESOURCE_ID
+        - RESOURCE_NOT_FOUND
+      example: VALIDATION_ERROR
+
+    ErrorDetail:
+      type: object
+      description: Опис конкретного поля та порушеного правила валідації
+      required:
+        - field
+        - issue
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          nullable: false
+          example: warning_threshold_ms
+        issue:
+          type: string
+          nullable: false
+          example: must be strictly less than timeout_ms (REQ-F-006)
+
+    ErrorResponse:
+      type: object
+      description: Єдина стандартизована модель помилки API без розкриття внутрішніх деталей реалізації (`REQ-API-005`)
+      required:
+        - timestamp
+        - code
+        - message
+      additionalProperties: false
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          nullable: false
+          description: Часова мітка виникнення помилки у форматі RFC3339 UTC
+          example: '2026-10-31T19:00:00Z'
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          minLength: 1
+          nullable: false
+          description: Людино-читаний опис помилки без внутрішніх стек-трейсів Go
+          example: Invalid resource configuration parameters
+        details:
+          type: array
+          description: Деталізований список помилок по окремих полях запиту
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
