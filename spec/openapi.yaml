@@ -1,0 +1,379 @@
+openapi: 3.0.3
+info:
+  title: GoUptime Monitoring API
+  version: 1.0.0
+  description: |
+    Формальний контракт для валідації конфігурації та моделювання перевірок доступності
+    згідно з SRS (REQ-F-001..015, REQ-NF-001..008).
+servers:
+  - url: http://localhost:4010
+    description: Stoplight Prism Mock API
+paths:
+  /v1/config/validate:
+    post:
+      summary: Validate monitoring configuration
+      operationId: validateConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigValidationRequest'
+            examples:
+              valid_with_defaults:
+                $ref: '#/components/examples/Config_Valid_WithDefaults'
+              invalid_warning_gte_timeout:
+                $ref: '#/components/examples/Config_Invalid_WarningGteTimeout'
+      responses:
+        '200':
+          description: Configuration is valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigValidationResult'
+              examples:
+                valid_response:
+                  $ref: '#/components/examples/ConfigValidationResult_Valid'
+        '400':
+          description: Configuration validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                duplicate_id:
+                  $ref: '#/components/examples/Config_Invalid_DuplicateId'
+  /v1/checks:run:
+    post:
+      summary: Execute single HTTP GET check
+      operationId: runSingleCheck
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRunRequest'
+            examples:
+              run_up:
+                $ref: '#/components/examples/CheckRunRequest_BDD001'
+              run_degraded:
+                $ref: '#/components/examples/CheckRunRequest_BDD002'
+              run_down_timeout:
+                $ref: '#/components/examples/CheckRunRequest_BDD003_Timeout'
+      responses:
+        '200':
+          description: Check executed and classified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckResult'
+              examples:
+                up:
+                  $ref: '#/components/examples/CheckResult_UP_BDD001'
+                degraded_redirect:
+                  $ref: '#/components/examples/CheckResult_DEGRADED_Redirect_BDD002'
+                down_timeout:
+                  $ref: '#/components/examples/CheckResult_DOWN_Timeout_BDD003'
+                down_redirect_loop:
+                  $ref: '#/components/examples/CheckResult_DOWN_RedirectLoop_BDD003'
+  /v1/checks:runBatch:
+    post:
+      summary: Execute checks for multiple resources in parallel
+      operationId: runBatchChecks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckBatchRunRequest'
+            examples:
+              batch_two_resources:
+                $ref: '#/components/examples/CheckBatchRunRequest_TwoResources'
+      responses:
+        '200':
+          description: Batch checks executed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckBatchRunResponse'
+              examples:
+                batch_response:
+                  $ref: '#/components/examples/CheckBatchRunResponse_TwoResources'
+components:
+  schemas:
+    ResourceConfig:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - url
+      properties:
+        id:
+          type: string
+          nullable: false
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$'
+        url:
+          type: string
+          nullable: false
+          minLength: 1
+          format: uri
+          pattern: '^https?://.+'
+        interval_seconds:
+          type: integer
+          nullable: false
+          minimum: 1
+          default: 10
+        timeout_ms:
+          type: integer
+          nullable: false
+          minimum: 1
+          default: 2000
+        warning_threshold_ms:
+          type: integer
+          nullable: false
+          minimum: 1
+          default: 800
+      description: |
+        warning_threshold_ms MUST be strictly less than timeout_ms.
+    ConfigValidationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - resources
+      properties:
+        resources:
+          type: array
+          nullable: false
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ResourceConfig'
+    ConfigValidationResult:
+      type: object
+      additionalProperties: false
+      required:
+        - valid
+        - resources
+      properties:
+        valid:
+          type: boolean
+          nullable: false
+        resources:
+          type: array
+          nullable: false
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ResourceConfig'
+    CheckRunRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - resource
+      properties:
+        resource:
+          $ref: '#/components/schemas/ResourceConfig'
+    CheckBatchRunRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - resources
+      properties:
+        resources:
+          type: array
+          nullable: false
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ResourceConfig'
+    CheckResult:
+      type: object
+      additionalProperties: false
+      required:
+        - timestamp
+        - id
+        - url
+        - status
+        - http_code
+        - latency_ms
+        - error
+      properties:
+        timestamp:
+          type: string
+          nullable: false
+          format: date-time
+          pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$'
+        id:
+          type: string
+          nullable: false
+          minLength: 1
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$'
+        url:
+          type: string
+          nullable: false
+          format: uri
+          pattern: '^https?://.+'
+        status:
+          type: string
+          nullable: false
+          enum: [UP, DEGRADED, DOWN]
+        http_code:
+          type: integer
+          nullable: false
+          minimum: 0
+        latency_ms:
+          type: integer
+          nullable: false
+          minimum: 0
+        error:
+          type: string
+          nullable: false
+    CheckBatchRunResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          nullable: false
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CheckResult'
+    Problem:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          nullable: false
+          pattern: '^CONFIG_[A-Z0-9_]+$'
+        message:
+          type: string
+          nullable: false
+  examples:
+    Config_Valid_WithDefaults:
+      summary: Valid config; numeric defaults are omitted
+      value:
+        resources:
+          - id: api-main
+            url: https://example.com/health
+    Config_Invalid_DuplicateId:
+      summary: Duplicate id is rejected
+      value:
+        code: CONFIG_DUPLICATE_ID
+        message: resource id "api-main" is duplicated
+    Config_Invalid_WarningGteTimeout:
+      summary: warning_threshold_ms must be less than timeout_ms
+      value:
+        resources:
+          - id: api-main
+            url: https://example.com/health
+            timeout_ms: 1000
+            warning_threshold_ms: 1000
+    ConfigValidationResult_Valid:
+      summary: Successful validation response
+      value:
+        valid: true
+        resources:
+          - id: api-main
+            url: https://example.com/health
+            interval_seconds: 10
+            timeout_ms: 2000
+            warning_threshold_ms: 800
+    CheckRunRequest_BDD001:
+      summary: Request for UP scenario
+      value:
+        resource:
+          id: api-main
+          url: https://example.com/up
+          timeout_ms: 2000
+          warning_threshold_ms: 800
+    CheckRunRequest_BDD002:
+      summary: Request for DEGRADED after redirect scenario
+      value:
+        resource:
+          id: api-redirect
+          url: https://example.com/redirect
+          timeout_ms: 2000
+          warning_threshold_ms: 800
+    CheckRunRequest_BDD003_Timeout:
+      summary: Request for timeout DOWN scenario
+      value:
+        resource:
+          id: api-slow
+          url: https://example.com/slow
+          timeout_ms: 2000
+          warning_threshold_ms: 800
+    CheckResult_UP_BDD001:
+      summary: BDD-001
+      value:
+        timestamp: '2026-10-31T18:00:00Z'
+        id: api-main
+        url: https://example.com/up
+        status: UP
+        http_code: 200
+        latency_ms: 650
+        error: ''
+    CheckResult_DEGRADED_Redirect_BDD002:
+      summary: BDD-002
+      value:
+        timestamp: '2026-10-31T18:00:01Z'
+        id: api-redirect
+        url: https://example.com/redirect
+        status: DEGRADED
+        http_code: 200
+        latency_ms: 1200
+        error: ''
+    CheckResult_DOWN_Timeout_BDD003:
+      summary: BDD-003 timeout case
+      value:
+        timestamp: '2026-10-31T18:00:02Z'
+        id: api-slow
+        url: https://example.com/slow
+        status: DOWN
+        http_code: 0
+        latency_ms: 2001
+        error: request timeout after 2000ms
+    CheckResult_DOWN_RedirectLoop_BDD003:
+      summary: BDD-003 redirect error case
+      value:
+        timestamp: '2026-10-31T18:00:03Z'
+        id: api-loop
+        url: https://example.com/loop
+        status: DOWN
+        http_code: 0
+        latency_ms: 320
+        error: redirect limit exceeded (max 3)
+    CheckBatchRunRequest_TwoResources:
+      summary: Batch request for two resources
+      value:
+        resources:
+          - id: api-main
+            url: https://example.com/up
+            timeout_ms: 2000
+            warning_threshold_ms: 800
+          - id: api-slow
+            url: https://example.com/slow
+            timeout_ms: 2000
+            warning_threshold_ms: 800
+    CheckBatchRunResponse_TwoResources:
+      summary: Batch response example
+      value:
+        results:
+          - timestamp: '2026-10-31T18:00:00Z'
+            id: api-main
+            url: https://example.com/up
+            status: UP
+            http_code: 200
+            latency_ms: 350
+            error: ''
+          - timestamp: '2026-10-31T18:00:02Z'
+            id: api-slow
+            url: https://example.com/slow
+            status: DOWN
+            http_code: 0
+            latency_ms: 2001
+            error: request timeout after 2000ms
