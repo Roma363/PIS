@@ -129,6 +129,38 @@
 
 Базова адреса запущеного Stoplight Prism Mock Server: `http://127.0.0.1:4010/api/v1`.
 
+### 6.0. Відтворюваний запуск у Windows PowerShell
+
+Запускайте Prism в окремому PowerShell:
+
+```powershell
+npx --yes @stoplight/prism-cli mock .\spec\openapi.yaml --host 127.0.0.1 --port 4010
+```
+
+В іншому PowerShell перевірте порт:
+
+```powershell
+Test-NetConnection 127.0.0.1 -Port 4010
+```
+
+Для кожного POST спочатку створюйте UTF-8-файл, а потім передавайте його через `--data-binary "@file"`. Це уникає втрати лапок JSON під час передачі native arguments до `curl.exe`:
+
+```powershell
+$bodyPath = Join-Path $env:TEMP 'gouptime-resource.json'
+[IO.File]::WriteAllText(
+  $bodyPath,
+  '{"id":"kpi-main","url":"https://kpi.ua"}',
+  (New-Object Text.UTF8Encoding($false))
+)
+curl.exe --max-time 5 -i -sS -X POST 'http://127.0.0.1:4010/api/v1/resources' `
+  -H 'Content-Type: application/json' `
+  -H 'Prefer: code=201,example=CreatedWithDefaults' `
+  --data-binary "@$bodyPath"
+Remove-Item $bodyPath -Force
+```
+
+Усі наступні приклади в цьому розділі наведені у **Bash-синтаксисі**. У Bash допустимий inline `-d`, але в PowerShell використовуйте file-backed варіант вище. Кожен запит має обмеження `--max-time 5`; статичний Prism mock не зберігає створені або видалені ресурси між запитами.
+
 ### POS-001 — Реєстрація ресурсу із застосуванням дефолтів (`REQ-F-005`, `REQ-API-002`)
 
 **Передумова:** передаються лише обов'язкові поля `id` та `url`.
@@ -136,7 +168,7 @@
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources \
   -H "Content-Type: application/json" \
   -H "Prefer: code=201,example=CreatedWithDefaults" \
   -d '{"id": "kpi-main", "url": "https://kpi.ua"}'
@@ -149,12 +181,32 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X GET http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X GET http://127.0.0.1:4010/api/v1/resources \
   -H "Accept: application/json" \
   -H "Prefer: code=200,example=ResourcesList"
 ```
 
 **Очікуваний результат:** код `200 OK`, JSON-масив об'єктів `Resource`.
+
+### Перевірка решти read-операцій
+
+Ці запити доповнюють POS-сценарії та перевіряють окремий маршрут ресурсу і маршрут останнього результату. Prism повертає статичні приклади й не підтверджує, що ресурс або результат реально зберігається.
+
+```bash
+curl --max-time 5 -i -sS -X GET http://127.0.0.1:4010/api/v1/resources/kpi-main \
+  -H "Accept: application/json" \
+  -H "Prefer: code=200,example=Resource"
+```
+
+Очікується `200 OK` і тіло `Resource`.
+
+```bash
+curl --max-time 5 -i -sS -X GET http://127.0.0.1:4010/api/v1/resources/kpi-main/results \
+  -H "Accept: application/json" \
+  -H "Prefer: code=200,example=LastResultUP"
+```
+
+Очікується `200 OK` і тіло `CheckResult`.
 
 ### POS-003 — Перевірка ресурсу зі статусом UP (`BDD-001`, `REQ-F-010`, `REQ-F-013`)
 
@@ -163,7 +215,7 @@ curl -i -X GET http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
   -H "Accept: application/json" \
   -H "Prefer: code=200,example=BDD-001-UP"
 ```
@@ -177,7 +229,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
   -H "Accept: application/json" \
   -H "Prefer: code=200,example=BDD-002-DEGRADED"
 ```
@@ -191,7 +243,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
   -H "Accept: application/json" \
   -H "Prefer: code=200,example=BDD-003-DOWN-Timeout"
 ```
@@ -203,7 +255,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources/kpi-main/checks \
 **Запит:**
 
 ```bash
-curl -i -X DELETE http://127.0.0.1:4010/api/v1/resources/kpi-main \
+curl --max-time 5 -i -sS -X DELETE http://127.0.0.1:4010/api/v1/resources/kpi-main \
   -H "Prefer: code=204"
 ```
 
@@ -218,7 +270,7 @@ curl -i -X DELETE http://127.0.0.1:4010/api/v1/resources/kpi-main \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources \
   -H "Content-Type: application/json" \
   -H "Prefer: code=400,example=EmptyRequiredField" \
   -d '{"id": "", "url": "https://kpi.ua"}'
@@ -231,7 +283,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources \
   -H "Content-Type: application/json" \
   -H "Prefer: code=409,example=DuplicateResourceID" \
   -d '{"id": "kpi-main", "url": "https://kpi.ua"}'
@@ -244,7 +296,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources \
   -H "Content-Type: application/json" \
   -H "Prefer: code=400,example=InvalidURLScheme" \
   -d '{"id": "ftp-srv", "url": "ftp://files.example.com/pub"}'
@@ -257,7 +309,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources \
   -H "Content-Type: application/json" \
   -H "Prefer: code=400,example=NullOrNonPositiveValue" \
   -d '{"id": "bad-timeout", "url": "https://kpi.ua", "timeout_ms": 0}'
@@ -270,7 +322,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
+curl --max-time 5 -i -sS -X POST http://127.0.0.1:4010/api/v1/resources \
   -H "Content-Type: application/json" \
   -H "Prefer: code=422,example=ThresholdExceedsTimeout" \
   -d '{"id": "bad-threshold", "url": "https://kpi.ua", "timeout_ms": 2000, "warning_threshold_ms": 2000}'
@@ -283,7 +335,7 @@ curl -i -X POST http://127.0.0.1:4010/api/v1/resources \
 **Запит:**
 
 ```bash
-curl -i -X GET http://127.0.0.1:4010/api/v1/resources/unknown-id \
+curl --max-time 5 -i -sS -X GET http://127.0.0.1:4010/api/v1/resources/unknown-id \
   -H "Accept: application/json" \
   -H "Prefer: code=404,example=ResourceNotFound"
 ```
