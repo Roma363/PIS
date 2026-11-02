@@ -1,59 +1,57 @@
-﻿# Звіт проходження контрольної точки API-GATE
+# Звіт API-GATE
 
-## 1. Metadata контрольної точки
+## Метадані
 
 | Поле | Значення |
 |---|---|
-| **Проєкт** | GoUptime |
-| **Дата** | 31.10.2026 |
-| **Етап SDD** | `API-GATE` |
-| **Лабораторна робота** | №4 — API-First Specification |
-| **Гілка** | `feature/api-specification` |
-| **Арбітр** | `Human — Roman Benza` |
-| **Рішення** | **APPROVED / GO** |
+| Проєкт | GoUptime |
+| Лабораторна робота | №4 — проєктування API за специфікацією |
+| Гілка | `feature/api-specification` |
+| Дата звіту/аудиту | 2026-11-02 |
+| Дата виконання mock-тестів | 2026-11-02 |
+| Попередній запис про gate | 2026-10-31, у попередньому коміті |
+| Поточне рішення | **BLOCKED / NO-GO** |
+| Людське схвалення | **Очікується явний людський перегляд; не стверджується** |
 
-## 2. Чеклист обов'язкових критеріїв API-GATE
+## Критерії gate
 
-| № | Критерій перевірки | Статус | Підтвердження |
-|---:|---|:---:|---|
-| 1 | OpenAPI 3.0.3-контракт створено та він відповідає затвердженому SRS. | **PASS** | [`spec/openapi.yaml`](../spec/openapi.yaml), [`spec/srs.md`](../spec/srs.md) |
-| 2 | Усі необхідні API-операції описані з коректними `operationId`, HTTP-методами та шляхами: `listResources`, `createResource`, `getResourceById`, `deleteResource`, `runResourceCheck`, `getResourceLastResult`. | **PASS** | [`spec/openapi.yaml`](../spec/openapi.yaml), [`docs/api_design.md`](../docs/api_design.md) |
-| 3 | Схеми `ResourceCreateRequest`, `Resource`, `CheckResult`, `AvailabilityStatus` та `ErrorResponse` містять обов'язкові поля, типи, обмеження і стабільні enum-значення. | **PASS** | [`spec/openapi.yaml`](../spec/openapi.yaml), [`docs/api_design.md`](../docs/api_design.md) |
-| 4 | Дефолтні значення `interval_seconds=10`, `timeout_ms=2000`, `warning_threshold_ms=800` та доменні обмеження відображені в API-контракті. | **PASS** | [`spec/srs.md`](../spec/srs.md), [`spec/openapi.yaml`](../spec/openapi.yaml), [`spec/traceability_matrix.md`](../spec/traceability_matrix.md) |
-| 5 | Розмежування помилок API визначене однозначно: `400`, `404`, `409`, `422` з єдиною моделлю `ErrorResponse`. | **PASS** | [`spec/openapi.yaml`](../spec/openapi.yaml), [`docs/api_design.md`](../docs/api_design.md), [`spec/traceability_matrix.md`](../spec/traceability_matrix.md) |
-| 6 | OpenAPI YAML пройшов синтаксичну та структурну валідацію рекомендованим валідатором. | **PASS** | [`logs/openapi-validation.log`](openapi-validation.log), [`spec/openapi.yaml`](../spec/openapi.yaml) |
-| 7 | Позитивні, BDD та негативні сценарії `POS-001..006`, `BDD-001..003`, `NEG-001..006` описані та пов'язані з операціями API. | **PASS** | [`docs/api_design.md`](../docs/api_design.md), [`spec/traceability_matrix.md`](../spec/traceability_matrix.md), [`logs/mock-api-verification.md`](mock-api-verification.md) |
-| 8 | JSON Schema валідація для обов'язкових полів, URL, числових меж, `nullable: false` та доменних інваріантів формалізована в контракті. | **PASS** | [`spec/openapi.yaml`](../spec/openapi.yaml), [`spec/srs.md`](../spec/srs.md), [`logs/mock-api-verification.md`](mock-api-verification.md) |
-| 9 | Простежуваність вимог до API-операцій і mock-сценаріїв завершена для `REQ-F-002..014`, `REQ-NF-003..008` та `REQ-API-001..005`. | **PASS** | [`spec/traceability_matrix.md`](../spec/traceability_matrix.md), [`spec/openapi.yaml`](../spec/openapi.yaml) |
-| 10 | Контракт зберігає межі системи: in-memory API без БД, веб-інтерфейсу, зовнішніх нотифікацій і запису стану на диск. | **PASS** | [`spec/srs.md`](../spec/srs.md), [`docs/api_design.md`](../docs/api_design.md), [`spec/openapi.yaml`](../spec/openapi.yaml), [`spec/traceability_matrix.md`](../spec/traceability_matrix.md) |
+| № | Критерій | Доказ | Статус | Наступна дія |
+|---:|---|---|:---:|---|
+| 1 | Існує контракт OpenAPI 3.0.3 | `spec/openapi.yaml`, `spec/srs.md` | **PASS — задокументовано** | Людський перегляд |
+| 2 | Існують шість необхідних операцій та operationId | Шляхи та operationId в OpenAPI | **PASS — контракт** | Людський перегляд |
+| 3 | Існують схеми, обов'язкові поля, enum та посилання | `spec/openapi.yaml`, `docs/api_design.md` | **PASS — контракт** | Runtime-тести в лабораторній №5 |
+| 4 | Дефолти та обмеження описані | Дефолти/minimum в OpenAPI, SRS та опис API | **PASS — описано** | Перевірити дефолти та міжполе́вий інваріант у лабораторній №5 |
+| 5 | Описані модель помилки та відповіді `400/404/409/422` | `ErrorResponse`, `ErrorCode`, відповіді операцій | **PASS — контракт** | Перевірити фактичне відображення кодів у лабораторній №5 |
+| 6 | OpenAPI пройшла автоматичну валідацію | Redocly lint успішно виконано 2026-11-02; `logs/openapi-validation.log` відсутній | **PASS — виконано, журнал не збережено** | За потреби зберегти результат |
+| 7 | Mock відтворює POS/BDD/NEG-сценарії | Усі операції/POS/BDD зафіксовані; NEG-001/003/004 не відтворюють очікуваний `400` | **BLOCKED** | Contract-тест або реальний API для відображення `400` |
+| 8 | Схемні та доменні обмеження перевірені | Redocly перевіряє документ; Prism не перевіряє `warning_threshold_ms < timeout_ms` | **PARTIAL** | Міжполе́вий тест у лабораторній №5 |
+| 9 | Матриця трасування відповідає OpenAPI | `spec/traceability_matrix.md`, усі `x-srs-requirements` мають записи в матриці | **PASS — трасування** | Людський перегляд |
+| 10 | Обсяг робіт не містить БД/UI/дискового стану | SRS, опис API та OpenAPI | **PASS — межі задокументовано** | Перевірити під час лабораторної №5 |
 
-> **Примітка щодо живого Mock API:** протокол містить усі команди та payload для `POS-001..006`, `BDD-001..003` і `NEG-001..006`. На момент виконання контрольної точки `127.0.0.1:4010` не приймав TCP-з'єднання (`connection refused`), тому фактичні HTTP-відповіді Prism не були отримані. Це не змінює PASS для контракту, його валідації та повноти тестового протоколу; live execution має бути повторено після запуску сервера.
+Статуси PASS у критеріях 1–6 та 9–10 не означають, що runtime-поведінка Go реалізована або перевірена. Prism повертає статичні приклади й не доводить реєстрацію, унікальність, видалення, перевірки ресурсів, роботу scheduler або JSONL у stdout.
 
-## 3. Контроль ризиків
+## Ризики
 
-| Ризик | Перевірка mitigation | Результат |
-|---|---|---|
-| `RISK-001` / `RISK-008` | Перевірено точні межі: `UP` при `latency_ms <= warning_threshold_ms`, `DEGRADED` при `warning_threshold_ms < latency_ms <= timeout_ms`, `DOWN` при `latency_ms > timeout_ms`. Перевірено інваріант `warning_threshold_ms < timeout_ms`. | **PASS** — оператори зафіксовані у [`spec/srs.md`](../spec/srs.md), [`spec/openapi.yaml`](../spec/openapi.yaml) та [`docs/api_design.md`](../docs/api_design.md). |
-| `RISK-013` | Перевірено відхилення `null` через `nullable: false` та значень `<= 0` через `minimum: 1` у JSON Schema OpenAPI; негативні payload винесені у `NEG-001`, `NEG-003`, `NEG-004`, `NEG-005`. | **PASS** — [`spec/openapi.yaml`](../spec/openapi.yaml), [`docs/api_design.md`](../docs/api_design.md), [`logs/mock-api-verification.md`](mock-api-verification.md). |
-| `RISK-015` | Підтверджено відсутність Scope Creep: немає БД, зовнішніх нотифікацій, веб-інтерфейсу чи збереження стану на диск. | **PASS** — межі зафіксовані у [`spec/srs.md`](../spec/srs.md), [`docs/api_design.md`](../docs/api_design.md) та [`spec/openapi.yaml`](../spec/openapi.yaml). |
+| Ризик | Доказ | Статус | Наступна дія |
+|---|---|:---:|---|
+| `RISK-001` / `RISK-008`: межі статусів та `warning_threshold_ms < timeout_ms` | Правила задокументовані; порівняння двох полів не виражається окремими `minimum` | **PARTIAL** | Граничні та міжполе́ві тести в лабораторній №5 |
+| `RISK-013`: null та непозитивні значення | Схема має `nullable: false` і `minimum: 1`; Prism не підтвердив усі очікувані `400` | **PARTIAL** | Contract/API-тести; не послаблювати схему |
+| `RISK-015`: розширення обсягу робіт | Контракт не містить БД, UI або зовнішніх сповіщень | **PASS — задокументовано** | Перевірити під час реалізації та перегляду |
 
-## 4. Аудит пропозицій AI-агента та корективи людини
+## Відтворюваність
 
-У межах Human-in-the-Loop аудиту зафіксовано такі рішення:
+Команди, спосіб передавання JSON через файл, результати HTTP-запитів та обмеження Prism наведені у [`mock-api-verification.md`](mock-api-verification.md). Для POST-запитів у PowerShell використовуйте `--data-binary "@file"`, а для кожного запиту — `--max-time 5`.
 
-- Людина заборонила додавання ендпоінта для збереження конфігурації на диск (`PUT /config/save`) та історії перевірок у базі даних. Межі `REQ-NF-001` і `REQ-NF-005` залишено без змін.
-- Людина скоригувала схему `ResourceCreateRequest`, додавши явну заборону `nullable: false` для полів, де `null` не допускається, відповідно до `REQ-F-006`.
-- Людина затвердила розмежування кодів помилок: `400 Bad Request` для синтаксису, типів і значень `<=0`; `409 Conflict` для дубліката `id` за `REQ-F-003`; `422 Unprocessable Entity` для порушення `warning_threshold_ms >= timeout_ms` за `REQ-F-006`.
-- Вихідний код у `/src` та тести у `/tests` не змінювалися. Реалізацію відкладено до Лабораторної роботи №5 відповідно до TDD-послідовності.
+Щоб зберегти результат валідації OpenAPI:
 
-## 5. Резолюція Арбітра
+```powershell
+npx --yes @redocly/cli lint .\spec\openapi.yaml 2>&1 | Tee-Object .\logs\openapi-validation.log
+```
 
-### Рішення
+Файл не створювався штучно під час цього аудиту.
 
-**GO — дозволити перехід до Лабораторної роботи №5 (TDD-реалізація).**
+## Рішення
 
-API-контракт, JSON Schema-обмеження, трасування вимог, контроль Scope та Human-in-the-Loop корективи визнані достатніми для переходу до реалізації. Реалізація API, scheduler, probe, reporter і тестів має виконуватися на наступному етапі без розширення затвердженого Scope.
+**BLOCKED / NO-GO.** Для NEG-001, NEG-003 та NEG-004 не підтверджено очікуваний `400` через особливості узгодження відповідей у Prism 5.16.0. Для зняття блокування потрібен окремий contract-тест/валідатор очікуваних відображень статусів або реальний Go API та тести в лабораторній №5. Збільшення тайм-аутів чи послаблення OpenAPI/SRS не є прийнятним виправленням.
 
-### Підпис арбітра
-
-**Human — Roman Benza**
+Реалізація REST API, scheduler, probe, reporter та runtime-валідація належать до лабораторної №5. Людське схвалення очікується після явного перегляду.
